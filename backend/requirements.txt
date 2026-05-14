@@ -1,0 +1,7 @@
+flask
+flask-cors
+pandas
+openpyxl
+google-cloud-aiplatform
+requests
+gunicorn
