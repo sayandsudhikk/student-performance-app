@@ -31,16 +31,6 @@ def teacher_interface():
                 for col in ['subject_score', 'attendance', 'study_hours', 'internal_mark']:
                     if col in df.columns:
                         df[col] = pd.to_numeric(df[col], errors='coerce')
-                st.write(df)
-                # graphs
-                if not df.empty:
-                    fig1 = px.bar(df, x='subject', y='subject_score', title='Subject vs Marks')
-                    fig2 = px.bar(df, x='subject', y='attendance', title='Subject vs Attendance')
-                    fig3 = px.bar(df, x='subject', y='study_hours', title='Subject vs Study Hours')
-                    st.plotly_chart(fig1, key='marks_chart')
-                    st.plotly_chart(fig2, key='attendance_chart')
-                    st.plotly_chart(fig3, key='study_hours_chart')
-
                 # store relevant values in session state for later use
                 st.session_state['current_student_id'] = student_id
                 st.session_state['current_df'] = df
@@ -52,9 +42,9 @@ def teacher_interface():
                 fig1 = px.bar(df, x='subject', y='subject_score', title='Subject vs Marks')
                 fig2 = px.bar(df, x='subject', y='attendance', title='Subject vs Attendance')
                 fig3 = px.bar(df, x='subject', y='study_hours', title='Subject vs Study Hours')
-                st.plotly_chart(fig1, key='marks_chart2')
-                st.plotly_chart(fig2, key='attendance_chart2')
-                st.plotly_chart(fig3, key='study_hours_chart2')
+                st.plotly_chart(fig1, key='marks_chart')
+                st.plotly_chart(fig2, key='attendance_chart')
+                st.plotly_chart(fig3, key='study_hours_chart')
 
             comment = st.text_area("Teacher comment", key='comment')
             if st.button("Generate Evaluation"):
@@ -86,8 +76,8 @@ def teacher_interface():
                         st.error(save_resp['error'])
                     else:
                         st.success("Evaluation saved")
-                        # clear stored gen
-                        del st.session_state['last_gen']
-                        del st.session_state['comment']
-                        del st.session_state['current_student_id']
-                        del st.session_state['current_df']
+                        # clear stored gen (use pop to avoid KeyError if key is missing)
+                        st.session_state.pop('last_gen', None)
+                        st.session_state.pop('comment', None)
+                        st.session_state.pop('current_student_id', None)
+                        st.session_state.pop('current_df', None)

@@ -42,7 +42,7 @@ if st.session_state.user is None:
                 rerun()
         if st.button("Back to login"):
             st.session_state.registering = False
-            st.experimental_rerun()
+            rerun()
     else:
         st.subheader("Login")
         username = st.text_input("Username")

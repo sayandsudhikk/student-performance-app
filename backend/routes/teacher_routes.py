@@ -55,8 +55,12 @@ def generate():
     if not rows:
         return jsonify({'error': 'student not found'}), 404
     student_data = {'records': [dict(r) for r in rows]}
-    llm_result = generate_evaluation(student_data, comment)
-    # if raw_response exists, include for debugging
+    try:
+        llm_result = generate_evaluation(student_data, comment)
+    except Exception as e:
+        return jsonify({'error': f'Evaluation failed: {str(e)}'}), 500
+    if llm_result.get('error'):
+        return jsonify(llm_result), 400
     return jsonify(llm_result), 200
 
 
@@ -80,11 +84,15 @@ def save_evaluation():
         conn.close()
         return jsonify({'error': 'student record not found'}), 404
     record_id = record['id']
+    if isinstance(recommendations, list):
+        recommendations_str = '\n'.join(str(r) for r in recommendations)
+    else:
+        recommendations_str = str(recommendations) if recommendations else ''
     cursor.execute(
         '''INSERT INTO evaluations
            (record_id, pass_fail_result, confidence_level, teacher_comment, ai_recommendation, evaluation_status)
            VALUES (?,?,?,?,?,?)''',
-        (record_id, pass_fail, confidence, comment, '\n'.join(recommendations), 'COMPLETED')
+        (record_id, pass_fail, confidence, comment, recommendations_str, 'COMPLETED')
     )
     conn.commit()
     conn.close()

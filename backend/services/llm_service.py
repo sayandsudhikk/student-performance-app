@@ -17,8 +17,8 @@ def generate_evaluation(student_data: dict, teacher_comment: str) -> dict:
     if llm_config.API_KEY and llm_config.USE_GEN_API:
         # Generative Language API path – uses a completely different JSON schema
         if not llm_config.GEN_MODEL:
-            raise ValueError("Set GEN_MODEL in llm_config when USE_GEN_API is True.")
-        import requests
+            return {'error': 'GEN_MODEL is not set in llm_config.'}
+        import requests as _requests
         url = (
             f"https://generativelanguage.googleapis.com/v1beta/models/"
             f"{llm_config.GEN_MODEL}:generateContent"
@@ -27,7 +27,6 @@ def generate_evaluation(student_data: dict, teacher_comment: str) -> dict:
             "Content-Type": "application/json",
             "X-goog-api-key": llm_config.API_KEY,
         }
-        # build body according to the curl example format
         body = {
             "contents": [
                 {
@@ -36,38 +35,44 @@ def generate_evaluation(student_data: dict, teacher_comment: str) -> dict:
                     ]
                 }
             ]
-            # note: generative language API does not accept a top-level temperature field in this payload
         }
-        resp = requests.post(url, json=body, headers=headers)
         try:
-            resp.raise_for_status()
-        except Exception as e:
-            # include response text in error for easier debugging
-            raise RuntimeError(f"Generative API error {resp.status_code}: {resp.text}")
-        jsonresp = resp.json()
+            resp = _requests.post(url, json=body, headers=headers, timeout=30)
+            if not resp.ok:
+                # Extract a human-friendly error message from the API response
+                try:
+                    err_body = resp.json()
+                    api_msg = err_body.get('error', {}).get('message', resp.text)
+                except Exception:
+                    api_msg = resp.text
+                print(f"[LLM_SERVICE] API error {resp.status_code}: {api_msg}")
+                return {'error': f'Gemini API error ({resp.status_code}): {api_msg}'}
+            jsonresp = resp.json()
+        except _requests.exceptions.RequestException as e:
+            print(f"[LLM_SERVICE] network error: {e}")
+            return {'error': f'Network error calling Gemini API: {e}'}
+
         print("[LLM_SERVICE] generative API raw response:", jsonresp)
         # the generative language API returns candidates list
         output_text = ''
         if 'candidates' in jsonresp and jsonresp['candidates']:
             cand = jsonresp['candidates'][0]
-            output_text = cand.get('content', '')
-            # handle cases where content is not a plain string
-            if isinstance(output_text, dict):
-                if 'text' in output_text:
-                    output_text = output_text['text']
-                else:
-                    output_text = str(output_text)
-        # if output_text ended up empty, log full response for debugging
+            content = cand.get('content', {})
+            # Gemini API: content = {role: ..., parts: [{text: "..."}]}
+            if isinstance(content, dict):
+                parts = content.get('parts', [])
+                if parts and isinstance(parts[0], dict):
+                    output_text = parts[0].get('text', '')
+                elif 'text' in content:
+                    output_text = content['text']
+            elif isinstance(content, str):
+                output_text = content
+        # if output_text ended up empty, return raw response for debugging
         if not output_text:
-            print("[LLM_SERVICE] empty response from generative API:", jsonresp)
-            # return result with raw json for UI to inspect
-            return {'pass_fail': None, 'confidence': None,
-                    'explanation': None, 'recommendations': [],
+            print("[LLM_SERVICE] empty text in generative API response:", jsonresp)
+            return {'error': 'Gemini API returned an empty response. Check API key and model name.',
                     'raw_response': jsonresp}
-        if not isinstance(output_text, str):
-            raise RuntimeError(f"Unexpected generative API response structure: {jsonresp}")
         parsed = parse_llm_output(output_text)
-        # include raw response for debugging
         parsed['raw_response'] = jsonresp
         return parsed
     elif llm_config.API_KEY:
